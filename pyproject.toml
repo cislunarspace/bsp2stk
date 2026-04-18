@@ -1,0 +1,23 @@
+[project]
+name = "bsp2stk"
+version = "0.1.0"
+description = "BSP to STK ephemeris converter"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.4.4",
+    "scipy>=1.17.1",
+    "jplephem>=2.18",
+    "PyQt6>=6.6",
+]
+
+[project.scripts]
+bsp2stk = "bsp2stk.__main__:main_cli"
+bsp2stk-gui = "bsp2stk.__main__:main_gui"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["src/bsp2stk"]
