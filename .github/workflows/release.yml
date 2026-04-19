@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install -e .
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller pyinstaller/bsp2stk.spec
+
+      - name: Build MSI
+        run: |
+          dotnet tool install --global wix
+          wix build build/msi/Product.wxs -o dist/bsp2stk.msi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            dist/bsp2stk.exe
+            dist/bsp2stk.msi
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install -e .
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build AppImage
+        run: |
+          pip install pyinstaller appimage-builder
+          pyinstaller --onefile --name bsp2stk src/bsp2stk/__main__.py
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          cp dist/bsp2stk AppDir/usr/bin/
+          # Create AppRun
+          cat > AppDir/AppRun << 'APPRUN'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          exec "${HERE}/usr/bin/bsp2stk" "$@"
+          APPRUN
+          chmod +x AppDir/AppRun
+          # Build AppImage using appimagetool
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage AppDir dist/bsp2stk.AppImage
+
+      - name: Build deb
+        run: |
+          # Create debian package structure
+          mkdir -p debdist/usr/bin
+          mkdir -p debdist/usr/share/applications
+          mkdir -p debdist/usr/share/doc/bsp2stk
+          mkdir -p debdist/DEBIAN
+          # Copy executable
+          cp dist/bsp2stk debdist/usr/bin/bsp2stk
+          # Create control file
+          cat > debdist/DEBIAN/control << 'CONTROL'
+          Package: bsp2stk
+          Version: 0.1.0
+          Section: science
+          Priority: optional
+          Architecture: amd64
+          Maintainer: bsp2stk
+          Description: BSP to STK ephemeris converter
+          CONTROL
+          # Create desktop file
+          cat > debdist/usr/share/applications/bsp2stk.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Name=bsp2stk
+          Comment=BSP to STK ephemeris converter
+          Exec=bsp2stk
+          Icon=bsp2stk
+          Terminal=true
+          Type=Application
+          DESKTOP
+          # Build deb package
+          dpkg-deb --build debdist dist/bsp2stk.deb
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            dist/bsp2stk.AppImage
+            dist/bsp2stk.deb
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: artifacts/windows
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: artifacts/linux
+
+      - name: Download test BSP
+        run: |
+          mkdir -p artifacts
+          cp bsp/Voyager_1_merged.bsp artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows/bsp2stk.exe
+            artifacts/windows/bsp2stk.msi
+            artifacts/linux/bsp2stk.AppImage
+            artifacts/linux/bsp2stk.deb
+            artifacts/Voyager_1_merged.bsp
+          draft: true
