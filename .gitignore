@@ -11,3 +11,16 @@ wheels/
 
 # Worktrees
 .worktrees/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# PyInstaller
+*.spec.orig
+*.spec.bak
+
+# WiX
+*.wixobj
+*.wixpdb
