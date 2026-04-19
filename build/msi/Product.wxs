@@ -26,7 +26,7 @@
     <Fragment>
         <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
             <Component>
-                <File Id="bsp2stk.exe" Source="..\dist\bsp2stk.exe" />
+                <File Id="bsp2stk.exe" Source="..\..\dist\bsp2stk.exe" />
             </Component>
         </ComponentGroup>
 
