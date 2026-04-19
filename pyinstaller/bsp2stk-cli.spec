@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
-    ['src/bsp2stk/__main__.py'],
+    ['../src/bsp2stk/__main__.py'],
     pathex=[],
     binaries=[],
     datas=collect_data_files('spiceypy') + collect_data_files('jplephem'),
