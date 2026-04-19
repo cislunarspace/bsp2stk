@@ -12,6 +12,7 @@ def run_menu():
         elif choice == "q":
             break
 
+import sys
 from pathlib import Path
 from bsp2stk.core.convert import convert_bsp_to_stk
 from bsp2stk.core.info import format_ephemeris_info
@@ -52,9 +53,19 @@ def convert_flow():
 
     stk_file = STK_DIR / f"{bsp_file.stem}.stk"
     STK_DIR.mkdir(parents=True, exist_ok=True)
+
+    def progress_bar(progress: float):
+        bar_length = 30
+        filled = int(bar_length * progress)
+        bar = "=" * filled + "-" * (bar_length - filled)
+        percent = int(progress * 100)
+        sys.stdout.write(f"\r  [{bar}] {percent}%")
+        sys.stdout.flush()
+
+    print("  转换中...", end="", flush=True)
     try:
-        convert_bsp_to_stk(str(bsp_file), str(stk_file), seg_idx)
-        print(f"转换完成: {stk_file}")
+        convert_bsp_to_stk(str(bsp_file), str(stk_file), seg_idx, progress_callback=progress_bar)
+        print(f"\n转换完成: {stk_file}")
     except Exception as e:
         print(f"转换失败: {e}")
 

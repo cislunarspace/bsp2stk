@@ -1,8 +1,32 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit, QProgressBar
+from PyQt6.QtCore import QThread, pyqtSignal, QObject
 from pathlib import Path
 
 BSP_DIR = Path(__file__).parent.parent.parent.parent / "bsp"
 STK_DIR = Path(__file__).parent.parent.parent.parent / "stk"
+
+
+class ConvertWorker(QObject):
+    progress = pyqtSignal(float)
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, bsp_path: str, stk_path: str):
+        super().__init__()
+        self.bsp_path = bsp_path
+        self.stk_path = stk_path
+
+    def run(self):
+        from bsp2stk.core.convert import convert_bsp_to_stk
+        try:
+            convert_bsp_to_stk(self.bsp_path, self.stk_path, progress_callback=self._on_progress)
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def _on_progress(self, progress: float):
+        self.progress.emit(progress)
+
 
 class ConvertView(QWidget):
     def __init__(self):
@@ -29,6 +53,13 @@ class ConvertView(QWidget):
         self.btn_convert.setEnabled(False)
         layout.addWidget(self.btn_convert)
 
+        # 进度条
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+
         # 结果显示
         self.result = QTextEdit()
         self.result.setReadOnly(True)
@@ -40,7 +71,6 @@ class ConvertView(QWidget):
         if not files:
             self.result.setText("bsp/ 目录中没有找到 .bsp 文件")
             return
-        # 简化：直接打开文件对话框
         path, _ = QFileDialog.getOpenFileName(self, "选择 BSP 文件", str(BSP_DIR), "BSP Files (*.bsp)")
         if path:
             self.selected_bsp = path
@@ -50,12 +80,42 @@ class ConvertView(QWidget):
     def _do_convert(self):
         if not self.selected_bsp:
             return
-        from bsp2stk.core.convert import convert_bsp_to_stk
+
         bsp_path = self.selected_bsp
         STK_DIR.mkdir(parents=True, exist_ok=True)
         stk_path = STK_DIR / f"{Path(bsp_path).stem}.stk"
-        try:
-            convert_bsp_to_stk(bsp_path, str(stk_path))
-            self.result.setText(f"转换成功: {stk_path}")
-        except Exception as e:
-            self.result.setText(f"转换失败: {e}")
+
+        self.btn_convert.setEnabled(False)
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.result.setText("转换中...")
+
+        self._worker = ConvertWorker(bsp_path, str(stk_path))
+        self._worker.progress.connect(self._on_progress)
+        self._worker.finished.connect(self._on_finished)
+        self._worker.error.connect(self._on_error)
+
+        self._worker_thread = QThread()
+        self._worker.moveToThread(self._worker_thread)
+        self._worker_thread.started.connect(self._worker.run)
+        self._worker_thread.start()
+
+    def _on_progress(self, progress: float):
+        self.progress_bar.setValue(int(progress * 100))
+
+    def _on_finished(self):
+        self.progress_bar.setVisible(False)
+        self.btn_convert.setEnabled(True)
+        self.result.setText(f"转换成功: {self._worker.stk_path}")
+        self._cleanup_thread()
+
+    def _on_error(self, error_msg: str):
+        self.progress_bar.setVisible(False)
+        self.btn_convert.setEnabled(True)
+        self.result.setText(f"转换失败: {error_msg}")
+        self._cleanup_thread()
+
+    def _cleanup_thread(self):
+        self._worker_thread.quit()
+        self._worker_thread.wait()
+        self._worker_thread.deleteLater()

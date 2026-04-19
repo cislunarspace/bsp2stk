@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=2.4.4",
     "scipy>=1.17.1",
     "jplephem>=2.18",
+    "spiceypy>=8.0",
     "PyQt6>=6.6",
 ]
 
