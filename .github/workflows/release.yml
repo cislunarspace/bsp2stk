@@ -58,26 +58,11 @@ jobs:
       - name: Install PyInstaller
         run: pip install pyinstaller
 
-      - name: Build AppImage
+      - name: Build Linux executable
         run: |
-          pip install pyinstaller appimage-builder
+          pip install pyinstaller
           pyinstaller --onefile --name bsp2stk src/bsp2stk/__main__.py
-          # Create AppDir structure
-          mkdir -p AppDir/usr/bin
-          cp dist/bsp2stk AppDir/usr/bin/
-          # Create AppRun
-          cat > AppDir/AppRun << 'APPRUN'
-          #!/bin/bash
-          SELF=$(readlink -f "$0")
-          HERE=${SELF%/*}
-          export PATH="${HERE}/usr/bin:${PATH}"
-          exec "${HERE}/usr/bin/bsp2stk" "$@"
-          APPRUN
-          chmod +x AppDir/AppRun
-          # Build AppImage using appimagetool
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-          ./appimagetool-x86_64.AppImage AppDir dist/bsp2stk.AppImage
+          tar -czvf dist/bsp2stk-linux.tar.gz dist/bsp2stk
 
       - name: Build deb
         run: |
@@ -116,7 +101,7 @@ jobs:
         with:
           name: linux-artifacts
           path: |
-            dist/bsp2stk.AppImage
+            dist/bsp2stk-linux.tar.gz
             dist/bsp2stk.deb
 
   release:
@@ -146,7 +131,7 @@ jobs:
           files: |
             artifacts/windows/bsp2stk.exe
             artifacts/windows/bsp2stk.msi
-            artifacts/linux/bsp2stk.AppImage
+            artifacts/linux/bsp2stk-linux.tar.gz
             artifacts/linux/bsp2stk.deb
             artifacts/Voyager_1_merged.bsp
           draft: true
