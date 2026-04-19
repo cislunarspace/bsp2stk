@@ -34,9 +34,8 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    'bsp2stk.exe',
-    None,  # no icon
-    [],
-    False,
-    'console',  # keep console for debugging output
+    name='bsp2stk.exe',
+    icon=None,
+    debug=False,
+    console=True,
 )

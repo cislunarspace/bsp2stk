@@ -31,9 +31,8 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    'bsp2stk-cli.exe',
-    None,
-    [],
-    False,
-    'console',
+    name='bsp2stk-cli.exe',
+    icon=None,
+    debug=False,
+    console=True,
 )
