@@ -12,7 +12,6 @@ def run_menu():
         elif choice == "q":
             break
 
-import os
 from pathlib import Path
 from bsp2stk.core.convert import convert_bsp_to_stk
 from bsp2stk.core.info import format_ephemeris_info
@@ -42,11 +41,22 @@ def convert_flow():
     for i, seg in enumerate(segments):
         print(f"  {i+1}. Target={seg['target']}, Center={seg['center']}")
     seg_choice = input("选择 Segment 编号 (默认 0): ").strip()
-    seg_idx = int(seg_choice) if seg_choice else 0
+    try:
+        seg_idx = int(seg_choice) if seg_choice else 0
+        if seg_idx < 0 or seg_idx >= len(segments):
+            print(f"无效选择，Segment 编号必须在 0 到 {len(segments)-1} 之间")
+            return
+    except ValueError:
+        print("无效输入，请输入数字")
+        return
 
     stk_file = STK_DIR / f"{bsp_file.stem}.stk"
-    convert_bsp_to_stk(str(bsp_file), str(stk_file), seg_idx)
-    print(f"转换完成: {stk_file}")
+    STK_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        convert_bsp_to_stk(str(bsp_file), str(stk_file), seg_idx)
+        print(f"转换完成: {stk_file}")
+    except Exception as e:
+        print(f"转换失败: {e}")
 
 def info_flow():
     files = list(BSP_DIR.glob("*.bsp"))

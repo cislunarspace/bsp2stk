@@ -1,6 +1,14 @@
-from datetime import datetime, timedelta
+"""BSP星历文件信息读取模块
 
-def get_segment_info(segment) -> dict:
+提供星历文件解析、时间转换和信息格式化功能。
+"""
+from datetime import datetime, timedelta
+from typing import Any
+
+from jplephem.spk import Segment
+
+
+def get_segment_info(segment: Segment) -> dict[str, Any]:
     """获取单个 segment 的详细信息"""
     start_jd = segment.start_jd
     end_jd = segment.end_jd
@@ -23,10 +31,11 @@ def format_ephemeris_info(bsp_path: str) -> str:
     """格式化输出星历文件信息"""
     from bsp2stk.io.handlers import load_bsp
     kernel = load_bsp(bsp_path)
+    segments = list(kernel.segments)
     lines = []
     lines.append(f"文件: {bsp_path}")
-    lines.append(f"Segments: {len(list(kernel.segments))}")
-    for i, seg in enumerate(kernel.segments):
+    lines.append(f"Segments: {len(segments)}")
+    for i, seg in enumerate(segments):
         info = get_segment_info(seg)
         lines.append(f"\nSegment {i+1}:")
         lines.append(f"  Center: {info['center']}")

@@ -1,5 +1,4 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit
-from PyQt6.QtCore import Qt
 from pathlib import Path
 
 BSP_DIR = Path(__file__).parent.parent.parent.parent / "bsp"
@@ -53,6 +52,7 @@ class ConvertView(QWidget):
             return
         from bsp2stk.core.convert import convert_bsp_to_stk
         bsp_path = self.selected_bsp
+        STK_DIR.mkdir(parents=True, exist_ok=True)
         stk_path = STK_DIR / f"{Path(bsp_path).stem}.stk"
         try:
             convert_bsp_to_stk(bsp_path, str(stk_path))
