@@ -114,6 +114,8 @@ jobs:
           name: linux-artifacts
           path: artifacts/linux
 
+      - uses: actions/checkout@v4
+
       - name: Download test BSP
         run: |
           mkdir -p artifacts
