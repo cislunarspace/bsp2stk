@@ -39,8 +39,8 @@ def test_jd_to_seconds_since_epoch_zero():
 def test_convert_produces_file(tmp_path):
     bsp_path = Path(__file__).parent.parent.parent / "bsp" / "Voyager_1_merged.bsp"
     stk_path = tmp_path / "output.stk"
-    # Use segment 9 (Earth Barycenter -> Earth) which is Type 2 and works with jplephem
-    convert_bsp_to_stk(str(bsp_path), str(stk_path), segment_index=9)
+    # Use segment 0 (Voyager 1 relative to Sun) which has full data coverage
+    convert_bsp_to_stk(str(bsp_path), str(stk_path), segment_index=0)
     assert stk_path.exists()
     content = stk_path.read_text()
     assert "BEGIN Ephemeris" in content
