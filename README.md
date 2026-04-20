@@ -4,23 +4,37 @@ BSP 星历文件转 STK 格式转换工具，同时提供 CLI 交互界面和 Py
 
 STK 格式为：
 ```
-stk.v.4.0
+stk.v.9.0
+
 BEGIN Ephemeris
- EphemerisName     Voyager_1_merged
- ScenarioEpoch     20 12月 1980 04:45:19
- Duration          1837.301854
- Step              60.0
- Interpolation      Lagrange
- InterpolationOrder 5
- CentralBody        Earth
- CoordinateSystem    J2000
- EphemerisTimePosVel
-  2444594.198146  -1442280879.977760  -138839108.340589  45691527.004220  -6.1662299481  -20.0995235459  4.4562592413
-  2444594.198841  -1442281249.951409  -138840314.311898  45691794.379741  -6.1662257676  -20.0995225097  4.4562586337
+
+    NumberOfEphemerisPoints		 121
+
+    ScenarioEpoch		 13 Feb 2023 00:00:00.000000
+
+# Epoch in JDate format: 2459988.50000000000000
+# Epoch in YYDDD format:   23044.00000000000000
+
+
+    InterpolationMethod		 Lagrange
+
+    InterpolationSamplesM1		 5
+
+    CentralBody		 Earth
+
+    CoordinateSystem		 J2000
+
+# Time of first point: 14 Feb 2023 00:00:00.000000000 UTCG = 2459989.50000000000000 JDate = 23045.00000000000000 YYDDD
+
+    EphemerisTimePosVel
+
+ 8.6400000000000000e+04  4.1144475636834656e+06  3.8117720687725376e+06  3.0265875408293619e+06 -2.7795146794637697e+02  2.9953764501686993e+02  6.1042717849106232e-01
+
+
 END Ephemeris
 
 ```
-> 如果需要修改 STK 格式，可以修改 [`src/bsp2stk/core/convert.py`](src/bsp2stk/core/convert.py) 文件中的常量定义（第 8-13 行），包括时间步长（`DEFAULT_STEP_SECONDS`）、插值方法（`INTERPOLATION_METHOD`）、插值阶数（`INTERPOLATION_ORDER`）、中心天体（`CENTRAL_BODY`）和坐标系（`COORDINATE_SYSTEM`）。
+> 如果需要修改 STK 格式，可以修改 [`src/bsp2stk/core/convert.py`](src/bsp2stk/core/convert.py) 文件中的常量定义（第 9-12 行），包括时间步长（`DEFAULT_STEP_SECONDS`）、插值方法（`INTERPOLATION_METHOD`）、插值阶数（`INTERPOLATION_SAMPLES_M1`）、中心天体（`CENTRAL_BODY`）和坐标系（`COORDINATE_SYSTEM`）。
 
 ## 安装
 
