@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import numpy as np
@@ -7,7 +6,7 @@ import spiceypy
 
 # Module-level constants
 DEFAULT_STEP_SECONDS: float = 60.0
-INTERPOLATION_ORDER: int = 5
+INTERPOLATION_SAMPLES_M1: int = 5
 CENTRAL_BODY: str = "Earth"
 COORDINATE_SYSTEM: str = "J2000"
 INTERPOLATION_METHOD: str = "Lagrange"
@@ -93,45 +92,73 @@ def convert_bsp_to_stk(
     center = segment.center
 
     # 生成 STK 格式数据
+    step_jd = step_seconds / 86400.0
+    num_points = int((end_jd - start_jd) / step_jd) + 1
+
     try:
         with open(stk_path, "w") as f:
-            f.write("stk.v.4.0\n")
+            f.write("stk.v.9.0\n")
+            f.write("\n")
             f.write("BEGIN Ephemeris\n")
-            f.write(f" EphemerisName     {Path(bsp_path).stem}\n")
-            f.write(f" ScenarioEpoch     {jd_to_stk_epoch(start_jd)}\n")
-            f.write(f" Duration          {end_jd - start_jd:.6f}\n")
-            f.write(f" Step              {step_seconds:.1f}\n")
-            f.write(f" Interpolation      {INTERPOLATION_METHOD}\n")
-            f.write(f" InterpolationOrder {INTERPOLATION_ORDER}\n")
-            f.write(f" CentralBody        {CENTRAL_BODY}\n")
-            f.write(f" CoordinateSystem    {COORDINATE_SYSTEM}\n")
-            f.write(" EphemerisTimePosVel\n")
+            f.write("\n")
+            f.write(f"    NumberOfEphemerisPoints\t\t {num_points}\n")
+            f.write("\n")
+            f.write(f"    ScenarioEpoch\t\t {jd_to_stk_epoch(start_jd)}\n")
+            f.write("\n")
+            f.write(f"# Epoch in JDate format: {start_jd:.14f}\n")
+            f.write(f"# Epoch in YYDDD format:   {jd_to_yyddd(start_jd)}\n")
+            f.write("\n")
+            f.write("\n")
+            f.write(f"    InterpolationMethod\t\t {INTERPOLATION_METHOD}\n")
+            f.write("\n")
+            f.write(f"    InterpolationSamplesM1\t\t {INTERPOLATION_SAMPLES_M1}\n")
+            f.write("\n")
+            f.write(f"    CentralBody\t\t {CENTRAL_BODY}\n")
+            f.write("\n")
+            f.write(f"    CoordinateSystem\t\t {COORDINATE_SYSTEM}\n")
+            f.write("\n")
+            epoch_str = jd_to_stk_epoch(start_jd)
+            f.write(
+                f"# Time of first point: {epoch_str}.000000000 UTCG"
+                f" = {start_jd:.14f} JDate"
+                f" = {jd_to_yyddd(start_jd)} YYDDD\n"
+            )
+            f.write("\n")
+            f.write("    EphemerisTimePosVel\t\t\n")
+            f.write("\n")
 
             # 采样输出位置速度
             jd = start_jd
-            step_jd = step_seconds / 86400.0
-            total_steps = int((end_jd - start_jd) / step_jd) + 1
             current_step = 0
             while jd <= end_jd:
                 # Convert JD to ET (seconds past J2000)
                 et = (jd - 2451545.0) * 86400.0
                 pos, vel = compute_ephemeris(bsp_path, target, center, et)
-                _write_ephemeris_line(f, jd, pos, vel)
+                _write_ephemeris_line(f, jd, start_jd, pos, vel)
                 jd += step_jd
                 current_step += 1
-                if progress_callback and total_steps > 0:
-                    progress_callback(current_step / total_steps)
+                if progress_callback and num_points > 0:
+                    progress_callback(current_step / num_points)
 
+            f.write("\n")
+            f.write("\n")
             f.write("END Ephemeris\n")
     except OSError as e:
         raise OSError(f"Failed to write STK file '{stk_path}': {e}") from e
 
 
-def _write_ephemeris_line(f, jd: float, pos: Tuple[float, float, float], vel: Tuple[float, float, float]) -> None:
-    """写入单行星历数据"""
+def _write_ephemeris_line(
+    f,
+    jd: float,
+    epoch_jd: float,
+    pos: Tuple[float, float, float],
+    vel: Tuple[float, float, float],
+) -> None:
+    """写入单行星历数据（相对秒数 + 科学计数法）"""
+    seconds = jd_to_seconds_since_epoch(jd, epoch_jd)
     f.write(
-        f"  {jd:.6f}  {pos[0]:.6f}  {pos[1]:.6f}  {pos[2]:.6f}  "
-        f"{vel[0]:.10f}  {vel[1]:.10f}  {vel[2]:.10f}\n"
+        f" {seconds:%23.16e}  {pos[0]:%23.16e}  {pos[1]:%23.16e}  {pos[2]:%23.16e}  "
+        f"{vel[0]:%23.16e}  {vel[1]:%23.16e}  {vel[2]:%23.16e}\n"
     )
 
 
