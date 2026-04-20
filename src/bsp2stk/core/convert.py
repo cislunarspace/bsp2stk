@@ -136,6 +136,19 @@ def _write_ephemeris_line(f, jd: float, pos: Tuple[float, float, float], vel: Tu
 
 
 def jd_to_stk_epoch(jd: float) -> str:
-    """儒略日转换为 STK 时代字符串"""
+    """儒略日转换为 STK v9.0 时间字符串（英文月名 + 微秒）"""
     dt = datetime(2000, 1, 1) + timedelta(days=jd - 2451545.0)
-    return dt.strftime("%d %b %Y %H:%M:%S")
+    return dt.strftime("%d %b %Y %H:%M:%S.%f")
+
+
+def jd_to_yyddd(jd: float) -> str:
+    """儒略日转换为 YYDDD 格式字符串"""
+    dt = datetime(2000, 1, 1) + timedelta(days=jd - 2451545.0)
+    yy = dt.strftime("%y")
+    ddd = dt.timetuple().tm_yday
+    return f"{int(yy):02d}{ddd:03d}.00000000000000"
+
+
+def jd_to_seconds_since_epoch(jd: float, epoch_jd: float) -> float:
+    """将儒略日转换为相对于 epoch 的秒数"""
+    return (jd - epoch_jd) * 86400.0
