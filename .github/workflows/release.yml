@@ -27,18 +27,12 @@ jobs:
       - name: Build executable
         run: pyinstaller pyinstaller/bsp2stk.spec --distpath dist
 
-      - name: Build MSI
-        run: |
-          dotnet tool install --global wix --version 6.0.0
-          wix build build/msi/Product.wxs -o dist/bsp2stk.msi
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-artifacts
           path: |
             dist/bsp2stk.exe
-            dist/bsp2stk.msi
 
   build-linux:
     runs-on: ubuntu-latest
@@ -130,7 +124,6 @@ jobs:
         with:
           files: |
             artifacts/windows/bsp2stk.exe
-            artifacts/windows/bsp2stk.msi
             artifacts/linux/bsp2stk-linux.tar.gz
             artifacts/linux/bsp2stk.deb
             artifacts/Voyager_1_merged.bsp
