@@ -157,8 +157,8 @@ def _write_ephemeris_line(
     """写入单行星历数据（相对秒数 + 科学计数法）"""
     seconds = jd_to_seconds_since_epoch(jd, epoch_jd)
     f.write(
-        f" {seconds:%23.16e}  {pos[0]:%23.16e}  {pos[1]:%23.16e}  {pos[2]:%23.16e}  "
-        f"{vel[0]:%23.16e}  {vel[1]:%23.16e}  {vel[2]:%23.16e}\n"
+        f" {seconds:23.16e}  {pos[0]:23.16e}  {pos[1]:23.16e}  {pos[2]:23.16e}  "
+        f"{vel[0]:23.16e}  {vel[1]:23.16e}  {vel[2]:23.16e}\n"
     )
 
 
