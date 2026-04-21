@@ -248,7 +248,7 @@ class ConvertView(QWidget):
 
         self.spin_interp_order = QSpinBox()
         self.spin_interp_order.setRange(1, 20)
-        self.spin_interp_order.setValue(convert_mod.INTERPOLATION_ORDER)
+        self.spin_interp_order.setValue(convert_mod.INTERPOLATION_SAMPLES_M1)
         stk_form.addRow("插值阶数:", self.spin_interp_order)
 
         self.combo_central_body = QComboBox()
@@ -351,7 +351,7 @@ class ConvertView(QWidget):
             }
             QFrame#segmentCard QLabel[subtle="true"] {
                 color: palette(placeholder-text);
-                font-size: 12px;
+                font-size: 9pt;
             }
             """
         )
@@ -370,7 +370,7 @@ class ConvertView(QWidget):
 <p style="margin:0 0 8px 0"><b>输出说明</b></p>
 <ul style="margin:0;padding-left:22px">
 <li>每个已勾选的 Segment 会生成 <b>一个</b> STK 文件。</li>
-<li>文件名：<code style="font-size:12px">{stem}_seg<b>索引</b>.stk</code>
+<li>文件名：<code style="font-size:9pt">{stem}_seg<b>索引</b>.stk</code>
 （索引为列表中的 Segment 编号）。</li>
 </ul>
 <p style="margin:10px 0 0 0"><small>示例：<code>{example}</code></small></p>
@@ -379,7 +379,7 @@ class ConvertView(QWidget):
 
     def _set_result_success(self, paths: list[str]) -> None:
         items = "".join(
-            f"<li style='margin:6px 0'><code style='font-size:12px'>{p}</code></li>" for p in paths
+            f"<li style='margin:6px 0'><code style='font-size:9pt'>{p}</code></li>" for p in paths
         )
         html = (
             "<div style='line-height:1.45'>"
@@ -392,7 +392,7 @@ class ConvertView(QWidget):
     def _restore_stk_defaults(self) -> None:
         self.spin_step.setValue(convert_mod.DEFAULT_STEP_SECONDS)
         self._fill_stk_combo(self.combo_interp_method, STK_INTERPOLATION_CHOICES, convert_mod.INTERPOLATION_METHOD)
-        self.spin_interp_order.setValue(convert_mod.INTERPOLATION_ORDER)
+        self.spin_interp_order.setValue(convert_mod.INTERPOLATION_SAMPLES_M1)
         self._fill_stk_combo(self.combo_central_body, STK_CENTRAL_BODY_CHOICES, convert_mod.CENTRAL_BODY)
         self._fill_stk_combo(self.combo_coord_system, STK_COORDINATE_CHOICES, convert_mod.COORDINATE_SYSTEM)
 

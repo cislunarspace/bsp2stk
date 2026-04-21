@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+env:
+  PYINSTALLER_VERSION: '6.19.0'
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -16,13 +19,24 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Verify version matches tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          PY_VER="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          if [ "$TAG_VER" != "$PY_VER" ]; then
+            echo "::error::Tag version ($TAG_VER) does not match pyproject.toml version ($PY_VER)"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           pip install uv
           uv pip install --system -e .
 
       - name: Install PyInstaller
-        run: pip install pyinstaller
+        run: pip install "pyinstaller==${{ env.PYINSTALLER_VERSION }}"
 
       - name: Build executable
         run: pyinstaller pyinstaller/bsp2stk.spec --distpath dist
@@ -44,40 +58,48 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Verify version matches tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          PY_VER="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          if [ "$TAG_VER" != "$PY_VER" ]; then
+            echo "::error::Tag version ($TAG_VER) does not match pyproject.toml version ($PY_VER)"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           pip install uv
           uv pip install --system -e .
 
       - name: Install PyInstaller
-        run: pip install pyinstaller
+        run: pip install "pyinstaller==${{ env.PYINSTALLER_VERSION }}"
 
       - name: Build Linux executable
         run: |
-          pip install pyinstaller
           pyinstaller --onefile --name bsp2stk src/bsp2stk/__main__.py
           tar -czvf dist/bsp2stk-linux.tar.gz dist/bsp2stk
 
       - name: Build deb
         run: |
-          # Create debian package structure
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p debdist/usr/bin
           mkdir -p debdist/usr/share/applications
           mkdir -p debdist/usr/share/doc/bsp2stk
           mkdir -p debdist/DEBIAN
-          # Copy executable
           cp dist/bsp2stk debdist/usr/bin/bsp2stk
-          # Create control file
-          cat > debdist/DEBIAN/control << 'CONTROL'
-          Package: bsp2stk
-          Version: 0.1.0
-          Section: science
-          Priority: optional
-          Architecture: amd64
-          Maintainer: bsp2stk
-          Description: BSP to STK ephemeris converter
-          CONTROL
-          # Create desktop file
+          {
+            echo "Package: bsp2stk"
+            echo "Version: ${VERSION}"
+            echo "Section: science"
+            echo "Priority: optional"
+            echo "Architecture: amd64"
+            echo "Maintainer: bsp2stk"
+            echo "Description: BSP to STK ephemeris converter"
+          } > debdist/DEBIAN/control
           cat > debdist/usr/share/applications/bsp2stk.desktop << 'DESKTOP'
           [Desktop Entry]
           Name=bsp2stk
@@ -87,7 +109,6 @@ jobs:
           Terminal=true
           Type=Application
           DESKTOP
-          # Build deb package
           dpkg-deb --build debdist dist/bsp2stk.deb
 
       - name: Upload artifacts
