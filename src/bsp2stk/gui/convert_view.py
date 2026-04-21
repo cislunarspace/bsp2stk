@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, Qt, pyqtSignal, QObject
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QMouseEvent, QWheelEvent
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -55,6 +55,23 @@ STK_COORDINATE_CHOICES: tuple[str, ...] = (
 from bsp2stk.core.info import get_segment_info
 from bsp2stk.gui.paths import BSP_DIR, STK_DIR, bsp_open_dialog_start
 from bsp2stk.io.handlers import load_bsp
+
+
+class _StkDoubleSpinBox(QDoubleSpinBox):
+    """STK 表单内禁用滚轮改值，避免误触；滚轮可交给外层 QScrollArea。"""
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        event.ignore()
+
+
+class _StkSpinBox(QSpinBox):
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        event.ignore()
+
+
+class _StkComboBox(QComboBox):
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        event.ignore()
 
 
 class SegmentCard(QFrame):
@@ -233,31 +250,31 @@ class ConvertView(QWidget):
         stk_form.setSpacing(10)
         stk_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         stk_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        self.spin_step = QDoubleSpinBox()
+        self.spin_step = _StkDoubleSpinBox()
         self.spin_step.setRange(0.1, 86400.0)
         self.spin_step.setDecimals(2)
         self.spin_step.setSingleStep(1.0)
         self.spin_step.setValue(convert_mod.DEFAULT_STEP_SECONDS)
         stk_form.addRow("时间步长 (秒):", self.spin_step)
 
-        self.combo_interp_method = QComboBox()
+        self.combo_interp_method = _StkComboBox()
         self.combo_interp_method.setEditable(False)
         self.combo_interp_method.setMinimumWidth(200)
         self._fill_stk_combo(self.combo_interp_method, STK_INTERPOLATION_CHOICES, convert_mod.INTERPOLATION_METHOD)
         stk_form.addRow("插值方法:", self.combo_interp_method)
 
-        self.spin_interp_order = QSpinBox()
+        self.spin_interp_order = _StkSpinBox()
         self.spin_interp_order.setRange(1, 20)
         self.spin_interp_order.setValue(convert_mod.INTERPOLATION_SAMPLES_M1)
         stk_form.addRow("插值阶数:", self.spin_interp_order)
 
-        self.combo_central_body = QComboBox()
+        self.combo_central_body = _StkComboBox()
         self.combo_central_body.setEditable(False)
         self.combo_central_body.setMinimumWidth(200)
         self._fill_stk_combo(self.combo_central_body, STK_CENTRAL_BODY_CHOICES, convert_mod.CENTRAL_BODY)
         stk_form.addRow("中心天体 (CentralBody):", self.combo_central_body)
 
-        self.combo_coord_system = QComboBox()
+        self.combo_coord_system = _StkComboBox()
         self.combo_coord_system.setEditable(False)
         self.combo_coord_system.setMinimumWidth(200)
         self._fill_stk_combo(self.combo_coord_system, STK_COORDINATE_CHOICES, convert_mod.COORDINATE_SYSTEM)
@@ -288,13 +305,18 @@ class ConvertView(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Minimum,
         )
+        work_inner.adjustSize()
+        work_stk_min = work_inner.minimumSizeHint()
+        if work_stk_min.height() < 1:
+            work_stk_min = work_layout.minimumSize()
+        work_inner.setMinimumSize(work_stk_min)
 
         self.work_scroll = QScrollArea()
         self.work_scroll.setWidgetResizable(True)
         self.work_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.work_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.work_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.work_scroll.setWidget(work_inner)
-        self.work_scroll.setMinimumHeight(160)
+        self.work_scroll.setMinimumHeight(work_stk_min.height())
         self.work_scroll.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
