@@ -27,6 +27,7 @@ def compute_ephemeris(
     target: int,
     center: int,
     et: float,
+    coordinate_system: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute position and velocity using spiceypy.
 
@@ -35,12 +36,14 @@ def compute_ephemeris(
         target: NAIF target ID (e.g., -31 for Voyager 1)
         center: NAIF center ID (e.g., 10 for Sun)
         et: Ephemeris time in seconds past J2000
+        coordinate_system: SPICE 坐标系名；默认使用模块常量 COORDINATE_SYSTEM
 
     Returns:
         Tuple of (position, velocity) in km and km/s
     """
+    frame = coordinate_system if coordinate_system is not None else COORDINATE_SYSTEM
     _ensure_kernel_loaded(bsp_path)
-    state, _ = spiceypy.spkezr(str(target), et, COORDINATE_SYSTEM, 'NONE', str(center))
+    state, _ = spiceypy.spkezr(str(target), et, frame, 'NONE', str(center))
     position = state[:3]
     velocity = state[3:]
     return position, velocity
@@ -52,6 +55,11 @@ def convert_bsp_to_stk(
     segment_index: int = 0,
     step_seconds: float = DEFAULT_STEP_SECONDS,
     progress_callback: Optional[Callable[[float], None]] = None,
+    ephemeris_name: Optional[str] = None,
+    interpolation_method: Optional[str] = None,
+    interpolation_order: Optional[int] = None,
+    central_body: Optional[str] = None,
+    coordinate_system: Optional[str] = None,
 ) -> None:
     """将 BSP 文件转换为 STK 格式
 
@@ -61,6 +69,11 @@ def convert_bsp_to_stk(
         segment_index: 要使用的 segment 索引
         step_seconds: 采样间隔（秒），默认 60.0
         progress_callback: 进度回调函数，接收 0-1 的进度值
+        ephemeris_name: STK 头中的 EphemerisName；默认使用 BSP 文件名（不含扩展名）
+        interpolation_method: STK 头插值方法；默认 INTERPOLATION_METHOD
+        interpolation_order: v9 头中 InterpolationSamplesM1；默认 INTERPOLATION_SAMPLES_M1
+        central_body: CentralBody 字段；默认 CENTRAL_BODY
+        coordinate_system: CoordinateSystem 字段，并用于 SPICE spkezr；默认 COORDINATE_SYSTEM
 
     Raises:
         FileNotFoundError: BSP 文件不存在或无法读取
@@ -90,6 +103,10 @@ def convert_bsp_to_stk(
     end_jd = segment.end_jd
     target = segment.target
     center = segment.center
+    interp_method = interpolation_method if interpolation_method is not None else INTERPOLATION_METHOD
+    interp_order = interpolation_order if interpolation_order is not None else INTERPOLATION_SAMPLES_M1
+    body = central_body if central_body is not None else CENTRAL_BODY
+    coords = coordinate_system if coordinate_system is not None else COORDINATE_SYSTEM
 
     # 生成 STK 格式数据
     step_jd = step_seconds / 86400.0
@@ -109,13 +126,13 @@ def convert_bsp_to_stk(
             f.write(f"# Epoch in YYDDD format:   {jd_to_yyddd(start_jd)}\n")
             f.write("\n")
             f.write("\n")
-            f.write(f"    InterpolationMethod\t\t {INTERPOLATION_METHOD}\n")
+            f.write(f"    InterpolationMethod\t\t {interp_method}\n")
             f.write("\n")
-            f.write(f"    InterpolationSamplesM1\t\t {INTERPOLATION_SAMPLES_M1}\n")
+            f.write(f"    InterpolationSamplesM1\t\t {interp_order}\n")
             f.write("\n")
-            f.write(f"    CentralBody\t\t {CENTRAL_BODY}\n")
+            f.write(f"    CentralBody\t\t {body}\n")
             f.write("\n")
-            f.write(f"    CoordinateSystem\t\t {COORDINATE_SYSTEM}\n")
+            f.write(f"    CoordinateSystem\t\t {coords}\n")
             f.write("\n")
             epoch_str = jd_to_stk_epoch(start_jd)
             f.write(
@@ -133,7 +150,7 @@ def convert_bsp_to_stk(
             while jd <= end_jd:
                 # Convert JD to ET (seconds past J2000)
                 et = (jd - 2451545.0) * 86400.0
-                pos, vel = compute_ephemeris(bsp_path, target, center, et)
+                pos, vel = compute_ephemeris(bsp_path, target, center, et, coordinate_system=coords)
                 _write_ephemeris_line(f, jd, start_jd, pos, vel)
                 jd += step_jd
                 current_step += 1

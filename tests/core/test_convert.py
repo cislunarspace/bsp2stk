@@ -1,9 +1,14 @@
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from bsp2stk.core.convert import convert_bsp_to_stk, jd_to_stk_epoch, jd_to_yyddd, jd_to_seconds_since_epoch
+from bsp2stk.core.convert import (
+    convert_bsp_to_stk,
+    jd_to_seconds_since_epoch,
+    jd_to_stk_epoch,
+    jd_to_yyddd,
+)
 
 
 def test_jd_to_stk_epoch_english_format():
@@ -36,11 +41,15 @@ def test_jd_to_seconds_since_epoch_zero():
     assert result == 0.0
 
 
-def test_convert_produces_file(tmp_path):
+def test_convert_produces_file(tmp_path, monkeypatch):
     bsp_path = Path(__file__).parent.parent.parent / "bsp" / "Voyager_1_merged.bsp"
     stk_path = tmp_path / "output.stk"
-    # Use segment 0 (Voyager 1 relative to Sun) which has full data coverage
-    convert_bsp_to_stk(str(bsp_path), str(stk_path), segment_index=0)
+
+    def fake_ephemeris(*_a, **_k):
+        return np.zeros(3), np.zeros(3)
+
+    monkeypatch.setattr("bsp2stk.core.convert.compute_ephemeris", fake_ephemeris)
+    convert_bsp_to_stk(str(bsp_path), str(stk_path), segment_index=9, step_seconds=1e12)
     assert stk_path.exists()
     content = stk_path.read_text()
     assert "BEGIN Ephemeris" in content
@@ -66,9 +75,9 @@ def test_convert_v9_format_structure(tmp_path):
     fake_pos = np.array([1000.0, 2000.0, 3000.0])
     fake_vel = np.array([1.0, 2.0, 3.0])
 
-    with patch("bsp2stk.io.handlers.load_bsp", return_value=mock_kernel), \
-         patch("bsp2stk.core.convert.compute_ephemeris", return_value=(fake_pos, fake_vel)):
-        from bsp2stk.core.convert import convert_bsp_to_stk
+    with patch("bsp2stk.io.handlers.load_bsp", return_value=mock_kernel), patch(
+        "bsp2stk.core.convert.compute_ephemeris", return_value=(fake_pos, fake_vel)
+    ):
         convert_bsp_to_stk(bsp_path, stk_path, step_seconds=86400.0)
 
     content = open(stk_path).read()
@@ -114,19 +123,43 @@ def test_convert_v9_scientific_notation(tmp_path):
     fake_pos = np.array([4114447.563, 3811772.068, 3026587.540])
     fake_vel = np.array([-277.951, 299.537, 6.104])
 
-    with patch("bsp2stk.io.handlers.load_bsp", return_value=mock_kernel), \
-         patch("bsp2stk.core.convert.compute_ephemeris", return_value=(fake_pos, fake_vel)):
-        from bsp2stk.core.convert import convert_bsp_to_stk
+    with patch("bsp2stk.io.handlers.load_bsp", return_value=mock_kernel), patch(
+        "bsp2stk.core.convert.compute_ephemeris", return_value=(fake_pos, fake_vel)
+    ):
         convert_bsp_to_stk(bsp_path, stk_path, step_seconds=86400.0)
 
     content = open(stk_path).read()
     lines = content.split("\n")
     data_lines = [
-        l for l in lines
-        if l.startswith(" ") and "e+" in l and not l.strip().startswith("#")
+        l for l in lines if l.startswith(" ") and "e+" in l and not l.strip().startswith("#")
     ]
     assert len(data_lines) > 0, "Expected scientific notation data lines"
     # Verify first column is relative seconds (small number near 0, not a JD like 2459988)
     first_value = data_lines[0].split()[0]
     first_float = float(first_value)
     assert first_float < 1.0, f"First time value should be ~0 (relative seconds), got {first_float}"
+
+
+def test_convert_stk_header_custom_format_options(tmp_path, monkeypatch):
+    bsp_path = Path(__file__).parent.parent.parent / "bsp" / "Voyager_1_merged.bsp"
+    stk_path = tmp_path / "opts.stk"
+
+    def fake_ephemeris(*_a, **_k):
+        return np.zeros(3), np.zeros(3)
+
+    monkeypatch.setattr("bsp2stk.core.convert.compute_ephemeris", fake_ephemeris)
+    convert_bsp_to_stk(
+        str(bsp_path),
+        str(stk_path),
+        segment_index=9,
+        step_seconds=1e12,
+        central_body="Moon",
+        coordinate_system="J2000",
+        interpolation_method="Lagrange",
+        interpolation_order=7,
+    )
+    text = stk_path.read_text()
+    assert "    CentralBody\t\t Moon\n" in text
+    assert "    CoordinateSystem\t\t J2000\n" in text
+    assert "    InterpolationMethod\t\t Lagrange\n" in text
+    assert "    InterpolationSamplesM1\t\t 7\n" in text
