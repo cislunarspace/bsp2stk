@@ -112,38 +112,19 @@ def convert_bsp_to_stk(
     step_jd = step_seconds / 86400.0
     num_points = int((end_jd - start_jd) / step_jd) + 1
 
-    try:
-        with open(stk_path, "w") as f:
-            f.write("stk.v.9.0\n")
-            f.write("\n")
-            f.write("BEGIN Ephemeris\n")
-            f.write("\n")
-            f.write(f"    NumberOfEphemerisPoints\t\t {num_points}\n")
-            f.write("\n")
-            f.write(f"    ScenarioEpoch\t\t {jd_to_stk_epoch(start_jd)}\n")
-            f.write("\n")
-            f.write(f"# Epoch in JDate format: {start_jd:.14f}\n")
-            f.write(f"# Epoch in YYDDD format:   {jd_to_yyddd(start_jd)}\n")
-            f.write("\n")
-            f.write("\n")
-            f.write(f"    InterpolationMethod\t\t {interp_method}\n")
-            f.write("\n")
-            f.write(f"    InterpolationSamplesM1\t\t {interp_order}\n")
-            f.write("\n")
-            f.write(f"    CentralBody\t\t {body}\n")
-            f.write("\n")
-            f.write(f"    CoordinateSystem\t\t {coords}\n")
-            f.write("\n")
-            epoch_str = jd_to_stk_epoch(start_jd)
-            f.write(
-                f"# Time of first point: {epoch_str}.000000000 UTCG"
-                f" = {start_jd:.14f} JDate"
-                f" = {jd_to_yyddd(start_jd)} YYDDD\n"
-            )
-            f.write("\n")
-            f.write("    EphemerisTimePosVel\t\t\n")
-            f.write("\n")
+    from bsp2stk.core.stk_writer import StkHeader, StkWriter
 
+    header = StkHeader(
+        num_points=num_points,
+        epoch_jd=start_jd,
+        interpolation_method=interp_method,
+        interpolation_samples_m1=interp_order,
+        central_body=body,
+        coordinate_system=coords,
+    )
+
+    try:
+        with StkWriter.open(stk_path, header) as writer:
             # 采样输出位置速度
             jd = start_jd
             current_step = 0
@@ -151,32 +132,14 @@ def convert_bsp_to_stk(
                 # Convert JD to ET (seconds past J2000)
                 et = (jd - 2451545.0) * 86400.0
                 pos, vel = compute_ephemeris(bsp_path, target, center, et, coordinate_system=coords)
-                _write_ephemeris_line(f, jd, start_jd, pos, vel)
+                seconds = jd_to_seconds_since_epoch(jd, start_jd)
+                writer.write_sample(seconds, pos, vel)
                 jd += step_jd
                 current_step += 1
                 if progress_callback and num_points > 0:
                     progress_callback(current_step / num_points)
-
-            f.write("\n")
-            f.write("\n")
-            f.write("END Ephemeris\n")
     except OSError as e:
         raise OSError(f"Failed to write STK file '{stk_path}': {e}") from e
-
-
-def _write_ephemeris_line(
-    f,
-    jd: float,
-    epoch_jd: float,
-    pos: Tuple[float, float, float],
-    vel: Tuple[float, float, float],
-) -> None:
-    """写入单行星历数据（相对秒数 + 科学计数法）"""
-    seconds = jd_to_seconds_since_epoch(jd, epoch_jd)
-    f.write(
-        f" {seconds:23.16e}  {pos[0]:23.16e}  {pos[1]:23.16e}  {pos[2]:23.16e}  "
-        f"{vel[0]:23.16e}  {vel[1]:23.16e}  {vel[2]:23.16e}\n"
-    )
 
 
 def jd_to_stk_epoch(jd: float) -> str:
