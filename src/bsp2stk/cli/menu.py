@@ -13,16 +13,18 @@ def run_menu():
             break
 
 import sys
-from pathlib import Path
 from bsp2stk.core.convert import convert_bsp_to_stk
 from bsp2stk.core.info import format_ephemeris_info
 from bsp2stk.io.handlers import list_segments
+from bsp2stk.paths import default_bsp_dir, default_stk_dir
 
-BSP_DIR = Path(__file__).parent.parent.parent.parent / "bsp"
-STK_DIR = Path(__file__).parent.parent.parent.parent / "stk"
 
 def convert_flow():
-    files = list(BSP_DIR.glob("*.bsp"))
+    bsp_dir = default_bsp_dir()
+    if bsp_dir is None:
+        print("bsp/ 目录中没有找到 .bsp 文件")
+        return
+    files = list(bsp_dir.glob("*.bsp"))
     if not files:
         print("bsp/ 目录中没有找到 .bsp 文件")
         return
@@ -51,8 +53,9 @@ def convert_flow():
         print("无效输入，请输入数字")
         return
 
-    stk_file = STK_DIR / f"{bsp_file.stem}.stk"
-    STK_DIR.mkdir(parents=True, exist_ok=True)
+    stk_dir = default_stk_dir()
+    stk_dir.mkdir(parents=True, exist_ok=True)
+    stk_file = stk_dir / f"{bsp_file.stem}.stk"
 
     def progress_bar(progress: float):
         bar_length = 30
@@ -70,7 +73,11 @@ def convert_flow():
         print(f"转换失败: {e}")
 
 def info_flow():
-    files = list(BSP_DIR.glob("*.bsp"))
+    bsp_dir = default_bsp_dir()
+    if bsp_dir is None:
+        print("bsp/ 目录中没有找到 .bsp 文件")
+        return
+    files = list(bsp_dir.glob("*.bsp"))
     if not files:
         print("bsp/ 目录中没有找到 .bsp 文件")
         return

@@ -53,8 +53,8 @@ STK_COORDINATE_CHOICES: tuple[str, ...] = (
 )
 
 from bsp2stk.core.info import get_segment_info
-from bsp2stk.gui.paths import BSP_DIR, STK_DIR, bsp_open_dialog_start
 from bsp2stk.io.handlers import load_bsp
+from bsp2stk.paths import bsp_open_dialog_start, default_bsp_dir, default_stk_dir
 
 
 class _StkDoubleSpinBox(QDoubleSpinBox):
@@ -486,7 +486,8 @@ class ConvertView(QWidget):
 
     def _select_file(self):
         start = bsp_open_dialog_start()
-        if not BSP_DIR.is_dir() or not any(BSP_DIR.glob("*.bsp")):
+        bsp_dir = default_bsp_dir()
+        if bsp_dir is None or not any(bsp_dir.glob("*.bsp")):
             self.result.setPlainText(
                 "提示：项目 bsp/ 目录下没有示例 .bsp 文件，您仍可在文件对话框中选择任意路径下的 BSP。"
             )
@@ -511,8 +512,9 @@ class ConvertView(QWidget):
 
         bsp_path = self.selected_bsp
         bsp_stem = Path(bsp_path).stem
-        STK_DIR.mkdir(parents=True, exist_ok=True)
-        self._pending_stk_paths = [str(STK_DIR / f"{bsp_stem}_seg{i}.stk") for i in indices]
+        stk_dir = default_stk_dir()
+        stk_dir.mkdir(parents=True, exist_ok=True)
+        self._pending_stk_paths = [str(stk_dir / f"{bsp_stem}_seg{i}.stk") for i in indices]
 
         step, interp_m, interp_o, body, coords = self._read_stk_format()
 
@@ -524,7 +526,7 @@ class ConvertView(QWidget):
         worker = ConvertWorker(
             bsp_path,
             indices,
-            STK_DIR,
+            stk_dir,
             bsp_stem,
             step,
             interp_m,

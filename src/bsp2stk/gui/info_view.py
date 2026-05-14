@@ -3,7 +3,7 @@ from pathlib import Path
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit
 
-from bsp2stk.gui.paths import bsp_open_dialog_start
+from bsp2stk.paths import bsp_open_dialog_start
 
 
 class InfoView(QWidget):
