@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional, Tuple
 
 import numpy as np
-import spiceypy
+
+from bsp2stk.core.ephemeris import BspEphemeris
 
 # Module-level constants
 DEFAULT_STEP_SECONDS: float = 60.0
@@ -10,16 +11,6 @@ INTERPOLATION_SAMPLES_M1: int = 5
 CENTRAL_BODY: str = "Earth"
 COORDINATE_SYSTEM: str = "J2000"
 INTERPOLATION_METHOD: str = "Lagrange"
-
-# spiceypy cache for loaded kernels
-_loaded_kernels: dict[str, bool] = {}
-
-
-def _ensure_kernel_loaded(bsp_path: str) -> None:
-    """Ensure the BSP kernel is loaded in spiceypy."""
-    if bsp_path not in _loaded_kernels:
-        spiceypy.furnsh(bsp_path)
-        _loaded_kernels[bsp_path] = True
 
 
 def compute_ephemeris(
@@ -30,6 +21,13 @@ def compute_ephemeris(
     coordinate_system: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute position and velocity using spiceypy.
+
+    .. deprecated::
+        This function opens and closes a ``BspEphemeris`` on every call,
+        which is wasteful in tight sampling loops. ``convert_bsp_to_stk``
+        will be migrated to hold a single ``BspEphemeris`` across the
+        whole conversion in a follow-up refactor (#10). Until then this
+        thin wrapper preserves the existing call shape.
 
     Args:
         bsp_path: Path to BSP file
@@ -42,11 +40,8 @@ def compute_ephemeris(
         Tuple of (position, velocity) in km and km/s
     """
     frame = coordinate_system if coordinate_system is not None else COORDINATE_SYSTEM
-    _ensure_kernel_loaded(bsp_path)
-    state, _ = spiceypy.spkezr(str(target), et, frame, 'NONE', str(center))
-    position = state[:3]
-    velocity = state[3:]
-    return position, velocity
+    with BspEphemeris.open(bsp_path) as eph:
+        return eph.sample(target=target, center=center, et=et, frame=frame)
 
 
 def convert_bsp_to_stk(

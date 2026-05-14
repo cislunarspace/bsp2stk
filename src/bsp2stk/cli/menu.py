@@ -15,7 +15,7 @@ def run_menu():
 import sys
 from bsp2stk.core.convert import convert_bsp_to_stk
 from bsp2stk.core.info import format_ephemeris_info
-from bsp2stk.io.handlers import list_segments
+from bsp2stk.core.ephemeris import BspEphemeris
 from bsp2stk.paths import default_bsp_dir, default_stk_dir
 
 
@@ -39,10 +39,11 @@ def convert_flow():
         print("无效选择")
         return
 
-    segments = list_segments(str(bsp_file))
+    with BspEphemeris.open(str(bsp_file)) as eph:
+        segments = eph.segments
     print(f"\n可用 Segment ({len(segments)}):")
     for i, seg in enumerate(segments):
-        print(f"  {i+1}. Target={seg['target']}, Center={seg['center']}")
+        print(f"  {i+1}. Target={seg.target}, Center={seg.center}")
     seg_choice = input("选择 Segment 编号 (默认 0): ").strip()
     try:
         seg_idx = int(seg_choice) if seg_choice else 0
