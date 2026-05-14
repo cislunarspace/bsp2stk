@@ -11,6 +11,37 @@ from bsp2stk.core.convert import (
 )
 
 
+def make_fake_ephemeris(segments_data, pos=None, vel=None):
+    """Create a BspEphemeris.open-shaped context manager fake."""
+    fake_eph = MagicMock()
+    fake_eph.segments = [
+        MagicMock(
+            start_jd=s["start_jd"],
+            end_jd=s["end_jd"],
+            target=s["target"],
+            center=s["center"],
+        )
+        for s in segments_data
+    ]
+    fake_eph.sample.return_value = (
+        pos if pos is not None else np.zeros(3),
+        vel if vel is not None else np.zeros(3),
+    )
+    cm = MagicMock()
+    cm.__enter__.return_value = fake_eph
+    cm.__exit__.return_value = False
+    return cm
+
+
+def make_segment(start_jd=2459988.5, end_jd=2459989.5, target=399, center=3):
+    return {
+        "start_jd": start_jd,
+        "end_jd": end_jd,
+        "target": target,
+        "center": center,
+    }
+
+
 def test_jd_to_stk_epoch_english_format():
     # JD 2459989.0 = 2023-02-13 00:00:00
     result = jd_to_stk_epoch(2459989.0)
@@ -41,15 +72,15 @@ def test_jd_to_seconds_since_epoch_zero():
     assert result == 0.0
 
 
-def test_convert_produces_file(tmp_path, monkeypatch):
+def test_convert_produces_file(tmp_path):
     bsp_path = Path(__file__).parent.parent.parent / "bsp" / "Voyager_1_merged.bsp"
     stk_path = tmp_path / "output.stk"
+    segments = [make_segment() for _ in range(10)]
 
-    def fake_ephemeris(*_a, **_k):
-        return np.zeros(3), np.zeros(3)
+    with patch("bsp2stk.core.convert.BspEphemeris") as mock_cls:
+        mock_cls.open.return_value = make_fake_ephemeris(segments)
+        convert_bsp_to_stk(str(bsp_path), str(stk_path), segment_index=9, step_seconds=1e12)
 
-    monkeypatch.setattr("bsp2stk.core.convert.compute_ephemeris", fake_ephemeris)
-    convert_bsp_to_stk(str(bsp_path), str(stk_path), segment_index=9, step_seconds=1e12)
     assert stk_path.exists()
     content = stk_path.read_text()
     assert "BEGIN Ephemeris" in content
@@ -60,27 +91,18 @@ def test_convert_v9_format_structure(tmp_path):
     """Verify the output file has stk.v.9.0 structure fields."""
     bsp_path = str(tmp_path / "fake.bsp")
     stk_path = str(tmp_path / "output.stk")
-
-    # Mock load_bsp to return a fake kernel with one segment
-    mock_segment = MagicMock()
-    mock_segment.start_jd = 2459988.5
-    mock_segment.end_jd = 2459989.5
-    mock_segment.target = 399
-    mock_segment.center = 3
-
-    mock_kernel = MagicMock()
-    mock_kernel.segments = [mock_segment]
-
-    # Mock compute_ephemeris to return fixed position/velocity
     fake_pos = np.array([1000.0, 2000.0, 3000.0])
     fake_vel = np.array([1.0, 2.0, 3.0])
 
-    with patch("bsp2stk.io.handlers.load_bsp", return_value=mock_kernel), patch(
-        "bsp2stk.core.convert.compute_ephemeris", return_value=(fake_pos, fake_vel)
-    ):
+    with patch("bsp2stk.core.convert.BspEphemeris") as mock_cls:
+        mock_cls.open.return_value = make_fake_ephemeris(
+            [make_segment()],
+            pos=fake_pos,
+            vel=fake_vel,
+        )
         convert_bsp_to_stk(bsp_path, stk_path, step_seconds=86400.0)
 
-    content = open(stk_path).read()
+    content = Path(stk_path).read_text()
 
     # Header
     assert content.startswith("stk.v.9.0\n")
@@ -110,25 +132,18 @@ def test_convert_v9_scientific_notation(tmp_path):
     """Verify data lines use scientific notation and relative seconds."""
     bsp_path = str(tmp_path / "fake.bsp")
     stk_path = str(tmp_path / "output.stk")
-
-    mock_segment = MagicMock()
-    mock_segment.start_jd = 2459988.5
-    mock_segment.end_jd = 2459989.5
-    mock_segment.target = 399
-    mock_segment.center = 3
-
-    mock_kernel = MagicMock()
-    mock_kernel.segments = [mock_segment]
-
     fake_pos = np.array([4114447.563, 3811772.068, 3026587.540])
     fake_vel = np.array([-277.951, 299.537, 6.104])
 
-    with patch("bsp2stk.io.handlers.load_bsp", return_value=mock_kernel), patch(
-        "bsp2stk.core.convert.compute_ephemeris", return_value=(fake_pos, fake_vel)
-    ):
+    with patch("bsp2stk.core.convert.BspEphemeris") as mock_cls:
+        mock_cls.open.return_value = make_fake_ephemeris(
+            [make_segment()],
+            pos=fake_pos,
+            vel=fake_vel,
+        )
         convert_bsp_to_stk(bsp_path, stk_path, step_seconds=86400.0)
 
-    content = open(stk_path).read()
+    content = Path(stk_path).read_text()
     lines = content.split("\n")
     data_lines = [
         l for l in lines if l.startswith(" ") and "e+" in l and not l.strip().startswith("#")
@@ -140,24 +155,24 @@ def test_convert_v9_scientific_notation(tmp_path):
     assert first_float < 1.0, f"First time value should be ~0 (relative seconds), got {first_float}"
 
 
-def test_convert_stk_header_custom_format_options(tmp_path, monkeypatch):
+def test_convert_stk_header_custom_format_options(tmp_path):
     bsp_path = Path(__file__).parent.parent.parent / "bsp" / "Voyager_1_merged.bsp"
     stk_path = tmp_path / "opts.stk"
+    segments = [make_segment() for _ in range(10)]
 
-    def fake_ephemeris(*_a, **_k):
-        return np.zeros(3), np.zeros(3)
+    with patch("bsp2stk.core.convert.BspEphemeris") as mock_cls:
+        mock_cls.open.return_value = make_fake_ephemeris(segments)
+        convert_bsp_to_stk(
+            str(bsp_path),
+            str(stk_path),
+            segment_index=9,
+            step_seconds=1e12,
+            central_body="Moon",
+            coordinate_system="J2000",
+            interpolation_method="Lagrange",
+            interpolation_order=7,
+        )
 
-    monkeypatch.setattr("bsp2stk.core.convert.compute_ephemeris", fake_ephemeris)
-    convert_bsp_to_stk(
-        str(bsp_path),
-        str(stk_path),
-        segment_index=9,
-        step_seconds=1e12,
-        central_body="Moon",
-        coordinate_system="J2000",
-        interpolation_method="Lagrange",
-        interpolation_order=7,
-    )
     text = stk_path.read_text()
     assert "    CentralBody\t\t Moon\n" in text
     assert "    CoordinateSystem\t\t J2000\n" in text
