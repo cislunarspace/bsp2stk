@@ -22,37 +22,13 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
 )
 
-from bsp2stk.core import convert as convert_mod
-
-# STK 头常用选项（与 STK 场景/星历约定一致的可选值）
-STK_INTERPOLATION_CHOICES: tuple[str, ...] = (
-    "Lagrange",
-    "Hermite",
-    "Linear",
-)
-STK_CENTRAL_BODY_CHOICES: tuple[str, ...] = (
-    "Earth",
-    "Moon",
-    "Sun",
-    "Mars",
-    "Jupiter",
-    "Saturn",
-    "Uranus",
-    "Neptune",
-    "Pluto",
-    "Venus",
-    "Mercury",
-)
-STK_COORDINATE_CHOICES: tuple[str, ...] = (
-    "J2000",
-    "EME2000",
-    "ICRF",
-    "Fixed",
-    "TOD",
-    "TrueOfDate",
-)
-
 from bsp2stk.core.info import get_segment_info
+from bsp2stk.core.stk_writer import (
+    STK_CENTRAL_BODY_CHOICES,
+    STK_COORDINATE_CHOICES,
+    STK_INTERPOLATION_CHOICES,
+    StkFormat,
+)
 from bsp2stk.io.handlers import load_bsp
 from bsp2stk.paths import bsp_open_dialog_start, default_bsp_dir, default_stk_dir
 
@@ -135,22 +111,14 @@ class ConvertWorker(QObject):
         segment_indices: list[int],
         stk_dir: Path,
         bsp_stem: str,
-        step_seconds: float,
-        interpolation_method: str,
-        interpolation_order: int,
-        central_body: str,
-        coordinate_system: str,
+        stk_format: StkFormat,
     ):
         super().__init__()
         self.bsp_path = bsp_path
         self.segment_indices = segment_indices
         self.stk_dir = stk_dir
         self.bsp_stem = bsp_stem
-        self.step_seconds = step_seconds
-        self.interpolation_method = interpolation_method
-        self.interpolation_order = interpolation_order
-        self.central_body = central_body
-        self.coordinate_system = coordinate_system
+        self.stk_format = stk_format
 
     def run(self):
         from bsp2stk.core.convert import convert_bsp_to_stk
@@ -168,12 +136,8 @@ class ConvertWorker(QObject):
                     self.bsp_path,
                     str(stk_path),
                     segment_index=seg_idx,
-                    step_seconds=self.step_seconds,
+                    stk_format=self.stk_format,
                     ephemeris_name=ephem_name,
-                    interpolation_method=self.interpolation_method,
-                    interpolation_order=self.interpolation_order,
-                    central_body=self.central_body,
-                    coordinate_system=self.coordinate_system,
                     progress_callback=segment_progress,
                 )
             self.finished.emit()
@@ -250,34 +214,35 @@ class ConvertView(QWidget):
         stk_form.setSpacing(10)
         stk_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         stk_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        default_format = StkFormat.default()
         self.spin_step = _StkDoubleSpinBox()
         self.spin_step.setRange(0.1, 86400.0)
         self.spin_step.setDecimals(2)
         self.spin_step.setSingleStep(1.0)
-        self.spin_step.setValue(convert_mod.DEFAULT_STEP_SECONDS)
+        self.spin_step.setValue(default_format.step_seconds)
         stk_form.addRow("时间步长 (秒):", self.spin_step)
 
         self.combo_interp_method = _StkComboBox()
         self.combo_interp_method.setEditable(False)
         self.combo_interp_method.setMinimumWidth(200)
-        self._fill_stk_combo(self.combo_interp_method, STK_INTERPOLATION_CHOICES, convert_mod.INTERPOLATION_METHOD)
+        self._fill_stk_combo(self.combo_interp_method, STK_INTERPOLATION_CHOICES, default_format.interpolation_method)
         stk_form.addRow("插值方法:", self.combo_interp_method)
 
         self.spin_interp_order = _StkSpinBox()
         self.spin_interp_order.setRange(1, 20)
-        self.spin_interp_order.setValue(convert_mod.INTERPOLATION_SAMPLES_M1)
+        self.spin_interp_order.setValue(default_format.interpolation_samples_m1)
         stk_form.addRow("插值阶数:", self.spin_interp_order)
 
         self.combo_central_body = _StkComboBox()
         self.combo_central_body.setEditable(False)
         self.combo_central_body.setMinimumWidth(200)
-        self._fill_stk_combo(self.combo_central_body, STK_CENTRAL_BODY_CHOICES, convert_mod.CENTRAL_BODY)
+        self._fill_stk_combo(self.combo_central_body, STK_CENTRAL_BODY_CHOICES, default_format.central_body)
         stk_form.addRow("中心天体 (CentralBody):", self.combo_central_body)
 
         self.combo_coord_system = _StkComboBox()
         self.combo_coord_system.setEditable(False)
         self.combo_coord_system.setMinimumWidth(200)
-        self._fill_stk_combo(self.combo_coord_system, STK_COORDINATE_CHOICES, convert_mod.COORDINATE_SYSTEM)
+        self._fill_stk_combo(self.combo_coord_system, STK_COORDINATE_CHOICES, default_format.coordinate_system)
         stk_form.addRow("坐标系 (CoordinateSystem):", self.combo_coord_system)
 
         btn_defaults = QPushButton("恢复默认格式")
@@ -412,22 +377,24 @@ class ConvertView(QWidget):
         self.result.setHtml(html)
 
     def _restore_stk_defaults(self) -> None:
-        self.spin_step.setValue(convert_mod.DEFAULT_STEP_SECONDS)
-        self._fill_stk_combo(self.combo_interp_method, STK_INTERPOLATION_CHOICES, convert_mod.INTERPOLATION_METHOD)
-        self.spin_interp_order.setValue(convert_mod.INTERPOLATION_SAMPLES_M1)
-        self._fill_stk_combo(self.combo_central_body, STK_CENTRAL_BODY_CHOICES, convert_mod.CENTRAL_BODY)
-        self._fill_stk_combo(self.combo_coord_system, STK_COORDINATE_CHOICES, convert_mod.COORDINATE_SYSTEM)
+        default_format = StkFormat.default()
+        self.spin_step.setValue(default_format.step_seconds)
+        self._fill_stk_combo(self.combo_interp_method, STK_INTERPOLATION_CHOICES, default_format.interpolation_method)
+        self.spin_interp_order.setValue(default_format.interpolation_samples_m1)
+        self._fill_stk_combo(self.combo_central_body, STK_CENTRAL_BODY_CHOICES, default_format.central_body)
+        self._fill_stk_combo(self.combo_coord_system, STK_COORDINATE_CHOICES, default_format.coordinate_system)
 
-    def _read_stk_format(self) -> tuple[float, str, int, str, str]:
-        method = self.combo_interp_method.currentText().strip() or convert_mod.INTERPOLATION_METHOD
-        body = self.combo_central_body.currentText().strip() or convert_mod.CENTRAL_BODY
-        coords = self.combo_coord_system.currentText().strip() or convert_mod.COORDINATE_SYSTEM
-        return (
-            float(self.spin_step.value()),
-            method,
-            int(self.spin_interp_order.value()),
-            body,
-            coords,
+    def _read_stk_format(self) -> StkFormat:
+        default_format = StkFormat.default()
+        method = self.combo_interp_method.currentText().strip() or default_format.interpolation_method
+        body = self.combo_central_body.currentText().strip() or default_format.central_body
+        coords = self.combo_coord_system.currentText().strip() or default_format.coordinate_system
+        return StkFormat(
+            step_seconds=float(self.spin_step.value()),
+            interpolation_method=method,
+            interpolation_samples_m1=int(self.spin_interp_order.value()),
+            central_body=body,
+            coordinate_system=coords,
         )
 
     def set_shared_bsp(self, path: str) -> None:
@@ -516,7 +483,7 @@ class ConvertView(QWidget):
         stk_dir.mkdir(parents=True, exist_ok=True)
         self._pending_stk_paths = [str(stk_dir / f"{bsp_stem}_seg{i}.stk") for i in indices]
 
-        step, interp_m, interp_o, body, coords = self._read_stk_format()
+        stk_format = self._read_stk_format()
 
         self.btn_convert.setEnabled(False)
         self.progress_bar.setVisible(True)
@@ -528,11 +495,7 @@ class ConvertView(QWidget):
             indices,
             stk_dir,
             bsp_stem,
-            step,
-            interp_m,
-            interp_o,
-            body,
-            coords,
+            stk_format,
         )
         thread = QThread()
         self._worker = worker

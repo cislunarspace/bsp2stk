@@ -9,10 +9,97 @@ samples and produce a valid STK v9.0 ephemeris file.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import IO, Iterator, Sequence
+from dataclasses import dataclass, fields, replace
+from typing import IO, Any, Iterator, Sequence
 
-from bsp2stk.core.convert import jd_to_stk_epoch, jd_to_yyddd
+# Note: jd_to_stk_epoch / jd_to_yyddd are imported lazily inside
+# _write_header() to avoid a circular import — bsp2stk.core.convert
+# imports StkFormat / StkHeader / StkWriter from this module at top
+# level.
+
+
+# ---------------------------------------------------------------------------
+# Allowed values for STK header fields (single source of truth; the GUI
+# imports these instead of maintaining its own copies).
+# ---------------------------------------------------------------------------
+
+STK_INTERPOLATION_CHOICES: tuple[str, ...] = (
+    "Lagrange",
+    "Hermite",
+    "Linear",
+)
+
+STK_CENTRAL_BODY_CHOICES: tuple[str, ...] = (
+    "Earth",
+    "Moon",
+    "Sun",
+    "Mars",
+    "Jupiter",
+    "Saturn",
+    "Uranus",
+    "Neptune",
+    "Pluto",
+    "Venus",
+    "Mercury",
+)
+
+STK_COORDINATE_CHOICES: tuple[str, ...] = (
+    "J2000",
+    "EME2000",
+    "ICRF",
+    "Fixed",
+    "TOD",
+    "TrueOfDate",
+)
+
+
+@dataclass(frozen=True)
+class StkFormat:
+    """Immutable bundle of STK header format parameters.
+
+    Replaces the previous pattern of passing 5 loose kwargs through every
+    layer. ``step_seconds`` is included because it travels alongside the
+    header knobs through the GUI -> worker -> conversion pipeline even
+    though it is not itself written to the header.
+    """
+
+    step_seconds: float
+    interpolation_method: str
+    interpolation_samples_m1: int
+    central_body: str
+    coordinate_system: str
+
+    @classmethod
+    def default(cls) -> "StkFormat":
+        """Return the canonical default :class:`StkFormat`."""
+        return cls(
+            step_seconds=60.0,
+            interpolation_method="Lagrange",
+            interpolation_samples_m1=5,
+            central_body="Earth",
+            coordinate_system="J2000",
+        )
+
+    def with_overrides(self, **kwargs: Any) -> "StkFormat":
+        """Return a new :class:`StkFormat` with selected fields replaced.
+
+        ``None`` values are treated as "no override" — convenient for
+        forwarding optional kwargs from backwards-compatible callers.
+
+        Raises:
+            TypeError: If ``kwargs`` contains an unknown field name.
+        """
+        allowed = {f.name for f in fields(self)}
+        unknown = [name for name in kwargs if name not in allowed]
+        if unknown:
+            raise TypeError(
+                f"StkFormat.with_overrides() got unexpected field(s): "
+                f"{sorted(unknown)}; allowed fields are {sorted(allowed)}"
+            )
+        effective = {name: value for name, value in kwargs.items() if value is not None}
+        if not effective:
+            return self
+        return replace(self, **effective)
 
 
 @dataclass(frozen=True)
@@ -37,6 +124,26 @@ class StkHeader:
     interpolation_samples_m1: int
     central_body: str
     coordinate_system: str
+
+    @classmethod
+    def from_format(
+        cls, fmt: "StkFormat", num_points: int, epoch_jd: float
+    ) -> "StkHeader":
+        """Build an :class:`StkHeader` from an :class:`StkFormat` plus the
+        per-conversion ``num_points`` and ``epoch_jd``.
+
+        ``StkFormat.step_seconds`` is *not* part of the header itself —
+        it controls the sampling loop, not the bytes written — so it is
+        intentionally dropped here.
+        """
+        return cls(
+            num_points=num_points,
+            epoch_jd=epoch_jd,
+            interpolation_method=fmt.interpolation_method,
+            interpolation_samples_m1=fmt.interpolation_samples_m1,
+            central_body=fmt.central_body,
+            coordinate_system=fmt.coordinate_system,
+        )
 
 
 class StkWriter:
@@ -75,6 +182,9 @@ class StkWriter:
     def _write_header(self) -> None:
         if self._header_written:
             return
+        # Local import: avoids circular dependency with bsp2stk.core.convert.
+        from bsp2stk.core.convert import jd_to_stk_epoch, jd_to_yyddd
+
         h = self._header
         epoch_str = jd_to_stk_epoch(h.epoch_jd)
         yyddd_str = jd_to_yyddd(h.epoch_jd)

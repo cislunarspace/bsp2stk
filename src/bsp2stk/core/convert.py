@@ -2,28 +2,47 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional
 
 from bsp2stk.core.ephemeris import BspEphemeris
+from bsp2stk.core.stk_writer import StkFormat, StkHeader, StkWriter
 
-DEFAULT_STEP_SECONDS: float = 60.0
-INTERPOLATION_SAMPLES_M1: int = 5
-CENTRAL_BODY: str = "Earth"
-COORDINATE_SYSTEM: str = "J2000"
-INTERPOLATION_METHOD: str = "Lagrange"
+# Module-level constants are derived from StkFormat.default() so the
+# single source of truth lives in stk_writer.py. Kept as named values
+# for back-compat with imports like `from ... import DEFAULT_STEP_SECONDS`.
+_DEFAULT_FORMAT: StkFormat = StkFormat.default()
+DEFAULT_STEP_SECONDS: float = _DEFAULT_FORMAT.step_seconds
+INTERPOLATION_SAMPLES_M1: int = _DEFAULT_FORMAT.interpolation_samples_m1
+CENTRAL_BODY: str = _DEFAULT_FORMAT.central_body
+COORDINATE_SYSTEM: str = _DEFAULT_FORMAT.coordinate_system
+INTERPOLATION_METHOD: str = _DEFAULT_FORMAT.interpolation_method
 
 
 def convert_bsp_to_stk(
     bsp_path: str,
     stk_path: str,
     segment_index: int = 0,
-    step_seconds: float = DEFAULT_STEP_SECONDS,
+    step_seconds: Optional[float] = None,
     progress_callback: Optional[Callable[[float], None]] = None,
     ephemeris_name: Optional[str] = None,
     interpolation_method: Optional[str] = None,
     interpolation_order: Optional[int] = None,
     central_body: Optional[str] = None,
     coordinate_system: Optional[str] = None,
+    stk_format: Optional[StkFormat] = None,
 ) -> None:
-    """将 BSP 文件转换为 STK v9.0 格式。"""
-    from bsp2stk.core.stk_writer import StkHeader, StkWriter
+    """将 BSP 文件转换为 STK v9.0 格式。
+
+    ``stk_format`` 为 STK 头参数包；为 ``None`` 时使用 :meth:`StkFormat.default`。
+    其余五个可选参数（``step_seconds``、``interpolation_method``、
+    ``interpolation_order``、``central_body``、``coordinate_system``）为向后
+    兼容的覆盖项，非 ``None`` 时会合并到 ``stk_format`` 之上。
+    """
+    base_format = stk_format if stk_format is not None else StkFormat.default()
+    effective_format = base_format.with_overrides(
+        step_seconds=step_seconds,
+        interpolation_method=interpolation_method,
+        interpolation_samples_m1=interpolation_order,
+        central_body=central_body,
+        coordinate_system=coordinate_system,
+    )
 
     try:
         eph_cm = BspEphemeris.open(bsp_path)
@@ -40,13 +59,10 @@ def convert_bsp_to_stk(
                 f"valid range is 0 to {len(segments) - 1}"
             )
         seg = segments[segment_index]
-        interp_method = interpolation_method if interpolation_method is not None else INTERPOLATION_METHOD
-        interp_order = interpolation_order if interpolation_order is not None else INTERPOLATION_SAMPLES_M1
-        body = central_body if central_body is not None else CENTRAL_BODY
-        coords = coordinate_system if coordinate_system is not None else COORDINATE_SYSTEM
-        step_jd = step_seconds / 86400.0
+        step_jd = effective_format.step_seconds / 86400.0
         num_points = int((seg.end_jd - seg.start_jd) / step_jd) + 1
-        header = StkHeader(num_points, seg.start_jd, interp_method, interp_order, body, coords)
+        header = StkHeader.from_format(effective_format, num_points, seg.start_jd)
+        coords = effective_format.coordinate_system
         try:
             with StkWriter.open(stk_path, header) as writer:
                 jd, step = seg.start_jd, 0
