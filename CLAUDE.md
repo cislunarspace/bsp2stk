@@ -1,16 +1,4 @@
-# Agent skills
-
-### Issue tracker
-
-Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default canonical labels (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context layout with `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+# CLAUDE.md
 
 ## 交流语言
 
@@ -189,3 +177,4 @@ async def send_welcome_email(user):
 **别解释用户已经知道的事。** 把解释的层次对齐到用户展现出来的知识水平。
 
 **commit message 要具体。** “Fix bug”毫无用处。“修好用户查询里的空指针，当邮箱含大写字符时”才能让下一个人清楚发生了什么。
+
